@@ -1,0 +1,4 @@
+name = SamPage
+description = Creates a page to interpret XML and post accordingly
+core = 7.x
+configuration = admin/config/SamPage

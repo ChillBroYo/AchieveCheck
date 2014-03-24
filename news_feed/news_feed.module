@@ -1,0 +1,58 @@
+<?php
+/**
+ * @file
+ * This file deals with special features for parsing xml into blog nodes
+ * @link www.achieveinternet.com @endlink 
+ *
+ * Module capabilities: User able to view a ADMIN UI page in which
+ * there will be refresh, update, submit and delete options in a proper format
+ * where they will be create content item from a parsed xml source
+ *
+ * Refresh: Loads all the items from the database in table 'NewsData'
+ * onto the Admin UI page for view and selection
+ *
+ * Update: Parses XML from 
+ * https://news.google.com/news/feeds?pz=1&cf=all
+ * &ned=us&hl=en&q=Political+party&output=rss
+ * and inserts the formatted data into table 'articles' and
+ * then calls the refresh function to render the items paged on the page
+ *
+ * Submit: Creates blog content objects filled with the information from
+ * selected items in the admin page and then calls delete on the objects
+ * just submitted (once a node is created its info will be deleted in
+ * the database)
+ *
+ * Delete: Removes selected items from the database
+ *
+ * @category Feeds
+ * @package modules/custom/news_feed
+ * @author Samson Tse
+ * @license Achieve Internet 
+ */
+
+/**
+ * Utilizes the Drupal help_hook().
+ */
+function news_feed_help($path, $arg) {
+  if ($path == "admin/help#news_feed") {
+
+    return '<p>' . t("Displays checkboxes specifying whether to post or not to post items to the page from a feed menu") . '<p>';
+  }
+}
+
+/**
+ * Utilizes the Drupal menu_hook().
+ */
+function news_feed_menu() {
+  $items = array();
+  $items['admin/config/services/news_feed'] = array(
+    'title' => 'news_feed Control',
+    'description' => 'Allows user to add and delete blogs from parsed xml',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('news_feed_admin'),
+    'access arguments' => array('administer news_feed settings'),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'news_feed.admin.inc',
+  );
+  return $items;
+}

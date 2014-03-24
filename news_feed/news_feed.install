@@ -1,0 +1,57 @@
+<?php
+/**
+ * @file
+ * This file deals with the installation of the news_feed module
+ * @link www.achieveinternet.com @endlink 
+ *
+ * File capabilities: Installs the module for the website, creating a table 
+ * called 'articles' and creating a table with schema title(text), guid(text),
+ * pubdate(datetime), link(text), description(text)
+ * 
+ * @category Feeds
+ * @package modules/custom/news_feed
+ * @author Samson Tse
+ * @license Achieve Internet 
+ */
+
+/**
+ * Implements Drupal hook_schema().
+ *
+ * Each item added will have the following values:
+ * Title, GUID, published date, link and description
+ */
+function news_feed_schema() {
+  $schema['articles'] = array(
+    'description' => 'A table holding each indiviudal record',
+    'fields' => array(
+      'title' => array(
+        'description' => 'The title of the article being stored',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'guid' => array(
+        'description' => 'The special identifier of a particular article',
+        'type' => 'text',
+        'not null' => TRUE,
+        'primary key' => TRUE,
+      ),
+      'pubdate' => array(
+        'description' => 'The date this article was published',
+        'type' => 'datetime',
+        'mysql_type' => 'DATETIME',
+        'not null' => TRUE,
+      ),
+      'link' => array(
+        'description' => 'The link for the article',
+        'type' => 'text',
+        'not null' => TRUE,
+      ),
+      'description' => array(
+        'description' => 'The actual article text',
+        'type' => 'text',
+      ),
+    ),
+  );
+  return $schema;
+}

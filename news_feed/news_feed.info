@@ -1,0 +1,4 @@
+name = News Feed
+description = Creates a live feed for articles from a particular xml page/source
+core = 7.x
+configure = admin/config/services/news_feed

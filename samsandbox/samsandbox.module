@@ -1,0 +1,120 @@
+<?php
+
+/**ATTEMPT PERFECT FORMATTING**/
+
+/**
+  *@file
+  *A block module that will handle displaying recent blog and forurm posts
+**/
+
+/**
+ * Implements a Hook for help called hook_help
+ *
+ *Displays Help and Module Information
+ *
+ *@param path
+ *  The path of the site we are using to display the help file
+ *	 
+ *@param arg
+ *	The Array that holds returned input from arg() function
+ */
+function samsandbox_help($path, $arg){
+switch($path){
+	case "admin/help#sampage":
+		return '<p>' . t("Displays links to nodes created on this date") . '</p>';
+	break; 
+  }
+}
+
+/**
+  * Implements hook_block_info()
+  */
+function samsandbox_block_info(){
+  $blocks['samsandbox'] = array(
+	// The name to appear in the list of blocks.
+	'info' => t('SandBox Man'),
+	//Default cache setting -> different versions per security role
+	'cache' => DRUPAL_CACHE_PER_ROLE,
+  );
+return $blocks;
+}
+
+/*
+ *
+ *
+ *Custom Content Function
+ *	
+ *Sets Beginning and end dates, then retrieves items in the database
+ *saved for that time period
+ *
+ *
+ *@return
+ *  a result set of the requested posts
+ */
+function samsandbox_current_posts(){
+	//Get Today's date for use
+	$today = getdate();
+	//calculate the date 2 weeks ago
+	$start_time = mktime(0, 0, 0, $today['mon'], ($today['mday'] - 14), ($today['year']));
+	//get all posts from one week ago to present
+	$end_time = time();	
+	//use api to get data
+	$query = db_select('node','n')
+	  ->fields('n', array('nid', 'title', 'created'))
+	  ->condition('status', 1) //Published check
+	  ->condition('created', array($start_time, $end_time), 'BETWEEN' )
+	  ->orderBy('created', 'DESC')
+	  ->execute();
+	return $query;
+}
+
+/*using Drupal hook "hook_block_view"*/
+function samsandbox_block_view($delta = ''){
+  switch($delta){
+    case 'samsandbox':
+      $block['subject'] = t('Sandbox Man');	
+      if(user_access('access_content')){
+      	//use custom function to get the data
+      	$result = samsandbox_current_posts();
+      	//Array contain items for block to display
+      	$items = array();
+      	//iterate over all objects and place them in block as links
+      	foreach($result as $node){
+      		$items[] = array(
+      			'data' => l($node->title, 'node/' . $node->nid),
+      			);
+      	}
+      }
+      //If no content, display no posts available
+      if(empty($items)){
+      	$block['content'] = t('No Posts Available bro');
+      }
+      //Theme content (through theme function)
+      else
+      {
+      	$block['content'] = theme('item_list', array(
+      		'items' =>$items));
+      }   
+	}
+  $xml = simplexml_load_file("https://news.google.com/news/feeds?pz=1&cf=all&ned=us&hl=en&q=Political+party&output=rss");
+  $storage = $xml;
+  $index = 0;
+    
+  
+    
+    foreach($xml->channel->item as $storage)
+    {
+      
+    }
+  //  print_r($index);
+    /*
+    $titleArray  = array(
+       $storage->channel->item[1]->title,);
+    */
+  //var_dump($titleArray);
+
+
+      return $block;
+}
+
+  
