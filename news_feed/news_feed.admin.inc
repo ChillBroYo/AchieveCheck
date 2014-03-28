@@ -5,11 +5,8 @@
  * in news_feed.module (Below is a copy of the info from that file)
  *
  * Module capabilities: User able to view a ADMIN UI page in which
- * there will be refresh, update, submit and delete options in a proper format
- * where they will be create content item from a parsed xml source
- *
- * Refresh: Loads all the items from the database in table 'NewsData'
- * onto the Admin UI page for view and selection
+ * there will be update, submit and delete options in a proper format
+ * where they will be create and delete content from a parsed xml source
  *
  * Update: Parses XML from 
  * https://news.google.com/news/feeds?pz=1&cf=all
@@ -19,10 +16,13 @@
  *
  * Submit: Creates blog content objects filled with the information from
  * selected items in the admin page and then calls delete on the objects
- * just submitted (once a node is created its info will be deleted in
- * the database)
+ * just submitted. In addition, its guid is stored in a separate table and
+ * recorded accordingly with the new content's nid, all of which is deleted 
+ * when the user presses delete
  *
  * Delete: Removes selected items from the database
+ * and removes the respective guid tracker from its database
+ * as well as the actual content item created
  * @link www.achieveinternet.com @endlink 
  *
  * File capabilities: Implements all functionality for the actual news_feed
@@ -179,19 +179,23 @@ function news_feed_delete_item($guid_to_delete) {
     ->execute()
     ->fetchAssoc();
 
-  $nid_to_delete = $result['nid'];
+  // Only delete items if database returns value.
+  if (isset($result) && !empty($result)) {
+    $nid_to_delete = $result['nid'];
 
-  node_delete($nid_to_delete);
+    // Delete content node.
+    node_delete($nid_to_delete);
 
-  // Delete items from "news_feed_articles" table.
-  db_delete('news_feed_articles')
-    ->condition('guid', $guid_to_delete)
-    ->execute();
+    // Delete items from "news_feed_articles" table.
+    db_delete('news_feed_articles')
+      ->condition('guid', $guid_to_delete)
+      ->execute();
 
-  // Delete items from "news_feed_guid" table.
-  db_delete('news_feed_guid')
-    ->condition('guid', $guid_to_delete)
-    ->execute();
+    // Delete items from "news_feed_guid" table.
+    db_delete('news_feed_guid')
+      ->condition('guid', $guid_to_delete)
+      ->execute();
+  }
 }
 
 /**
@@ -199,25 +203,28 @@ function news_feed_delete_item($guid_to_delete) {
  */
 function news_feed_submit_items($nodes_to_submit) {
 
-  // Go through all nodes' information and create according content.
+  // If there are nodes to submit, submit them.
+  if (isset($nodes_to_submit) && !empty($nodes_to_submit)) {
 
-  $node = new stdClass();
-  $node->title = $nodes_to_submit['title'];
-  $node->created = strtotime($nodes_to_submit['pubdate']);
-  $node->type = "blog";
-  $node->format = variable_get('filter_default_format', '');
-  $node->language = LANGUAGE_NONE;
-  $node->published = 1;
-  $node->body[LANGUAGE_NONE][0]['value'] = $nodes_to_submit['description'];
-  $node->body[LANGUAGE_NONE][0]['format'] = 'full_html';
-  node_save($node);
+    // Go through all nodes' information and create according content.
+    $node = new stdClass();
+    $node->title = $nodes_to_submit['title'];
+    $node->created = strtotime($nodes_to_submit['pubdate']);
+    $node->type = "blog";
+    $node->format = variable_get('filter_default_format', '');
+    $node->language = LANGUAGE_NONE;
+    $node->published = 1;
+    $node->body[LANGUAGE_NONE][0]['value'] = $nodes_to_submit['description'];
+    $node->body[LANGUAGE_NONE][0]['format'] = 'full_html';
+    node_save($node);
 
-  db_insert('news_feed_guid')
-    ->fields(array(
-        'guid' => $nodes_to_submit['guid'],
-        'nid' => $node->nid,
-        ))
-      ->execute();
+    db_insert('news_feed_guid')
+      ->fields(array(
+          'guid' => $nodes_to_submit['guid'],
+          'nid' => $node->nid,
+          ))
+        ->execute();
+  }
 }
 
 /**
@@ -230,9 +237,7 @@ function news_feed_admin_form_delete($form, &$form_state) {
   foreach ($values['table'] as $delta => $item) {
 
     if (is_string($item)) {
-
       $output = array();
-
       $output = $form_state['complete form']['databaseInfo']['table']['#options'][$delta]['guid'];
 
       // Call Delete items function based on titles collected.
@@ -240,7 +245,7 @@ function news_feed_admin_form_delete($form, &$form_state) {
     }
   }
 
-  drupal_set_message(t('Boom! The item(s) have been deleted.'));
+  drupal_set_message(t('Boom! The selected item(s) have been deleted.'));
 }
 
 /**
