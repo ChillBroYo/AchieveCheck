@@ -14,7 +14,7 @@
  * Update: Parses XML from 
  * https://news.google.com/news/feeds?pz=1&cf=all
  * &ned=us&hl=en&q=Political+party&output=rss
- * and inserts the formatted data into table 'articles' and
+ * and inserts the formatted data into table 'news_feed_articles' and
  * then calls the refresh function to render the items paged on the page
  *
  * Submit: Creates blog content objects filled with the information from
@@ -36,12 +36,7 @@
  * @license Achieve Internet 
  */
 
-/**
- * Creates the admin form.
- */
-function news_feed_admin() {
-  return $news_feed_admin_form();
-}
+define('NUM_ELEMENTS_PAGED', 2);
 
 /**
  * Admin page builder.
@@ -67,20 +62,23 @@ function news_feed_XML_store() {
 
   // Store database values.
   $xml = simplexml_load_file("https://news.google.com/news/feeds?pz=1&cf=all&ned=us&hl=en&q=Political+party&output=rss");
-  foreach ($xml->channel->item as $item_value) {
 
-    db_merge('articles')
-      ->key(array('guid' => $item_value->guid))
-      ->fields(array(
-        'title' => $item_value->title,
-        'guid' => $item_value->guid,
-        'pubdate' => date('Y-m-d H:i:s', strtotime((string) $item_value->pubDate)),
-        'link' => $item_value->link,
-        'description' => $item_value->description,
-        ))
-      ->execute();
+  // Check if the xml file loaded has anything before pulling data.
+  if (isset($xml->channel->item) && !empty($xml->channel->item)) {
+    foreach ($xml->channel->item as $item_value) {
+
+      db_merge('news_feed_articles')
+        ->key(array('guid' => $item_value->guid))
+        ->fields(array(
+          'title' => $item_value->title,
+          'guid' => $item_value->guid,
+          'pubdate' => date('Y-m-d H:i:s', strtotime((string) $item_value->pubDate)),
+          'link' => $item_value->link,
+          'description' => $item_value->description,
+          ))
+        ->execute();
+    }
   }
-
   // Return the refreshed table value.
   return news_feed_refresh();
 }
@@ -96,15 +94,16 @@ function news_feed_refresh() {
     'title' => t('Title'),
     'pubdate' => t('Date Published'),
     'description' => t('Summary'),
+    'guid' => t('Unique Identifier'),
   );
 
   // Select the database tables and format the data in a pager-ready format.
-  $query = db_select('articles', 'articleInfo')->extend('PagerDefault');
+  $query = db_select('news_feed_articles', 'articleInfo')->extend('PagerDefault');
   $query->fields('articleInfo');
 
   // Adjust pager options.
   $result = $query
-    ->limit(2)
+    ->limit(NUM_ELEMENTS_PAGED)
     ->orderBy('guid')
     ->execute();
 
@@ -114,12 +113,13 @@ function news_feed_refresh() {
   }
   $some_options = array();
 
-  // For each individual row, store proper data.
+  // For each individual row, store data and differentiate based on guid.
   foreach ($rows as $row) {
     $some_options[$row['data']['guid']] = array(
       'title' => $row['data']['title'],
       'pubdate' => $row['data']['pubdate'],
       'description' => $row['data']['description'],
+      'guid' => $row['data']['guid'],
     );
   }
 
@@ -157,7 +157,7 @@ function news_feed_ControlButtons() {
     '#submit' => array('news_feed_admin_form_delete'),
   );
 
-  // Control button 'Delete' assignment.
+  // Control button 'Submit' assignment.
   $form['Sbutton'] = array(
     '#type' => 'submit',
     '#default_value' => 'Submit',
@@ -165,27 +165,33 @@ function news_feed_ControlButtons() {
     '#submit' => array('news_feed_admin_form_submit'),
   );
 
-  // Control button 'Refresh' assignment.
-  $form['Rbutton'] = array(
-    '#type' => 'submit',
-    '#default_value' => 'Refresh',
-    '#required' => TRUE,
-    '#submit' => array('news_feed_admin_form_refresh'),
-  );
   return $form;
 }
 
 /**
  * Removes items from the database based on the titles selected.
  */
-function news_feed_delete_items($titles_to_delete) {
-  foreach ($titles_to_delete as $delta => $title) {
+function news_feed_delete_item($guid_to_delete) {
 
-    // Delete items from "articles" table.
-    db_delete('articles')
-      ->condition('title', $title)
-      ->execute();
-  }
+  $result = db_select('news_feed_guid', 'guids')
+    ->condition('guid', $guid_to_delete, '=')
+    ->fields('guids')
+    ->execute()
+    ->fetchAssoc();
+
+  $nid_to_delete = $result['nid'];
+
+  node_delete($nid_to_delete);
+
+  // Delete items from "news_feed_articles" table.
+  db_delete('news_feed_articles')
+    ->condition('guid', $guid_to_delete)
+    ->execute();
+
+  // Delete items from "news_feed_guid" table.
+  db_delete('news_feed_guid')
+    ->condition('guid', $guid_to_delete)
+    ->execute();
 }
 
 /**
@@ -193,27 +199,25 @@ function news_feed_delete_items($titles_to_delete) {
  */
 function news_feed_submit_items($nodes_to_submit) {
 
-  // Loop through all nodes' information and create according content.
-  foreach ($nodes_to_submit as $delta => $node_data) {
+  // Go through all nodes' information and create according content.
 
-    $node = new stdClass();
-    $node->title = $node_data['title'];
-    $node->created = strtotime($node_data['pubdate']);
-    $node->type = "blog";
-    $node->guid = $node_data['guid'];
-    $node->format = variable_get('filter_default_format', '');
-    $node->language = LANGUAGE_NONE;
-    $node->published = 1;
-    $node->body[LANGUAGE_NONE][0]['value'] = $node_data['description'];
-    $node->body[LANGUAGE_NONE][0]['format'] = 'full_html';
-    node_save($node);
-  }
+  $node = new stdClass();
+  $node->title = $nodes_to_submit['title'];
+  $node->created = strtotime($nodes_to_submit['pubdate']);
+  $node->type = "blog";
+  $node->format = variable_get('filter_default_format', '');
+  $node->language = LANGUAGE_NONE;
+  $node->published = 1;
+  $node->body[LANGUAGE_NONE][0]['value'] = $nodes_to_submit['description'];
+  $node->body[LANGUAGE_NONE][0]['format'] = 'full_html';
+  node_save($node);
 
-  // Display items created.
-  if (!empty($nodes_to_submit)) {
-    drupal_set_message('You have selected the following items:<br/><br/>'
-      . implode($nodes_to_submit, '<br/>'));
-  }
+  db_insert('news_feed_guid')
+    ->fields(array(
+        'guid' => $nodes_to_submit['guid'],
+        'nid' => $node->nid,
+        ))
+      ->execute();
 }
 
 /**
@@ -227,13 +231,14 @@ function news_feed_admin_form_delete($form, &$form_state) {
 
     if (is_string($item)) {
 
-      // If the item is a string store the title of the object.
-      $output[] = $form_state['complete form']['databaseInfo']['table']['#options'][$delta]['title'];
+      $output = array();
+
+      $output = $form_state['complete form']['databaseInfo']['table']['#options'][$delta]['guid'];
+
+      // Call Delete items function based on titles collected.
+      news_feed_delete_item($output);
     }
   }
-
-  // Call Delete items function based on titles collected.
-  news_feed_delete_items($output);
 
   drupal_set_message(t('Boom! The item(s) have been deleted.'));
 }
@@ -250,35 +255,26 @@ function news_feed_admin_form_update($form, &$form_state) {
 }
 
 /**
- * Utilize drupal submit handler and refresh items on page.
- */
-function news_feed_admin_form_refresh($form, &$form_state) {
-
-  drupal_set_message(t('Entries have been refreshed'));
-}
-
-/**
  * Utilize Drupal submit handler to create content.
  */
 function news_feed_admin_form_submit($form, &$form_state) {
 
-  $output = array();
   $values = $form_state['values'];
-  $items_selected = array();
 
   // Retrieve data from form for content display.
   foreach ($values['table'] as $delta => $item) {
 
     if (is_string($item)) {
 
-      $output[$delta]['title'] = $form_state['complete form']['databaseInfo']['table']['#options'][$delta]['title'];
-      $output[$delta]['guid'] = $delta;
-      $output[$delta]['pubdate'] = $form_state['complete form']['databaseInfo']['table']['#options'][$delta]['pubdate'];
-      $output[$delta]['description'] = $form_state['complete form']['databaseInfo']['table']['#options'][$delta]['description'];
+      $output = array();
+      $output['title'] = $form_state['complete form']['databaseInfo']['table']['#options'][$delta]['title'];
+      $output['pubdate'] = $form_state['complete form']['databaseInfo']['table']['#options'][$delta]['pubdate'];
+      $output['description'] = $form_state['complete form']['databaseInfo']['table']['#options'][$delta]['description'];
+      $output['guid'] = $delta;
+      // Send items to function for creation.
+      news_feed_submit_items($output);
     }
   }
 
-  // Send items to function for creation.
-  news_feed_submit_items($output);
   drupal_set_message(t('Zing! The content nodes have been created'));
 }

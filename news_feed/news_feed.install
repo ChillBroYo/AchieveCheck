@@ -17,11 +17,19 @@
 /**
  * Implements Drupal hook_schema().
  *
+ * For news_feed_articles table:
  * Each item added will have the following values:
  * Title, GUID, published date, link and description
+ *
+ * For news_feed_guid table
+ * Table stores a guid value with each node's respective nid value
+ * to establish a unique table to control items created and deleted
  */
 function news_feed_schema() {
-  $schema['articles'] = array(
+  $schema = array();
+
+  // Table for news_feed articles.
+  $schema['news_feed_articles'] = array(
     'description' => 'A table holding each indiviudal record',
     'fields' => array(
       'title' => array(
@@ -50,6 +58,23 @@ function news_feed_schema() {
       'description' => array(
         'description' => 'The actual article text',
         'type' => 'text',
+      ),
+    ),
+  );
+
+  // Table for news_feed_guid.
+  $schema['news_feed_guid'] = array(
+    'description' => 'A table holding each indiviudal submitted items unique ID and its GUID',
+    'fields' => array(
+      'guid' => array(
+        'description' => 'The unique identifier of the item stored',
+        'type' => 'text',
+        'not null' => TRUE,
+      ),
+      'nid' => array(
+        'description' => 'The unique idenifier of each node stored',
+        'type' => 'text',
+        'not null' => TRUE,
       ),
     ),
   );

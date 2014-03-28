@@ -8,9 +8,6 @@
  * there will be refresh, update, submit and delete options in a proper format
  * where they will be create content item from a parsed xml source
  *
- * Refresh: Loads all the items from the database in table 'NewsData'
- * onto the Admin UI page for view and selection
- *
  * Update: Parses XML from 
  * https://news.google.com/news/feeds?pz=1&cf=all
  * &ned=us&hl=en&q=Political+party&output=rss
@@ -46,12 +43,11 @@ function news_feed_help($path, $arg) {
 function news_feed_menu() {
   $items = array();
   $items['admin/config/services/news_feed'] = array(
-    'title' => 'news_feed Control',
+    'title' => 'News Feed Control Panel',
     'description' => 'Allows user to add and delete blogs from parsed xml',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('news_feed_admin'),
+    'page arguments' => array('news_feed_admin_form'),
     'access arguments' => array('administer news_feed settings'),
-    'type' => MENU_NORMAL_ITEM,
     'file' => 'news_feed.admin.inc',
   );
   return $items;
