@@ -23,12 +23,15 @@
  * Delete: Removes selected items from the database
  * and removes the respective guid tracker from its database
  * as well as the actual content item created
+ *
+ * Content Node Tracking: has a separate table for storing and retrieving 
+ * unique id's for each piece of control panel blog content. Also displays 
+ * Google's guid for each piece of content created with control panel.
  * @link www.achieveinternet.com @endlink 
  *
  * File capabilities: Implements all functionality for the actual news_feed
  * module as well as passes all functionality up to the module
  * 
- * NOTES: there is no implementation of hook_form_alter()
  *
  * @category Feeds
  * @package modules/custom/news_feed
@@ -136,6 +139,42 @@ function news_feed_refresh() {
 }
 
 /**
+ * Implements Drupal hook form_alter().
+ */
+function news_feed_form_alter(&$form, &$form_state, $form_id) {
+
+  // Only change the form if we are accessing a blog node.
+  if ($form_id === 'blog_node_form') {
+
+    // See if item is in the id table.
+    $possible_guid = db_select('news_feed_guid', 'guids')
+    ->condition('nid', $form['nid']['#value'], '=')
+    ->fields('guids')
+    ->execute()
+    ->fetchAssoc();
+
+    // If there is a nid match, display corresponding guid.
+    if (!empty($possible_guid)) {
+      $form['guid'] = array(
+        '#type' => 'textfield',
+        '#title' => 'GUID',
+        '#default_value' => $possible_guid['guid'],
+      );
+    }
+
+    // If there is no match display unavailablity.
+    else {
+      $form['guid'] = array(
+        '#type' => 'textfield',
+        '#title' => 'GUID Unavailable',
+        '#default_value' => 'No available GUID stored',
+      );
+    }
+  }
+}
+
+
+/**
  * Builds the default button objects for manipulating objects in the table.
  */
 function news_feed_ControlButtons() {
@@ -195,7 +234,12 @@ function news_feed_delete_item($guid_to_delete) {
     db_delete('news_feed_guid')
       ->condition('guid', $guid_to_delete)
       ->execute();
+
+    // Return sucess value.
+    return 1;
   }
+  // Return failure value.
+  return 0;
 }
 
 /**
@@ -210,21 +254,28 @@ function news_feed_submit_items($nodes_to_submit) {
     $node = new stdClass();
     $node->title = $nodes_to_submit['title'];
     $node->created = strtotime($nodes_to_submit['pubdate']);
-    $node->type = "blog";
+    $node->type = 'blog';
+    $node->guid = $nodes_to_submit['guid'];
     $node->format = variable_get('filter_default_format', '');
     $node->language = LANGUAGE_NONE;
     $node->published = 1;
     $node->body[LANGUAGE_NONE][0]['value'] = $nodes_to_submit['description'];
     $node->body[LANGUAGE_NONE][0]['format'] = 'full_html';
     node_save($node);
-
-    db_insert('news_feed_guid')
-      ->fields(array(
-          'guid' => $nodes_to_submit['guid'],
-          'nid' => $node->nid,
-          ))
-        ->execute();
   }
+}
+
+/**
+ * Implements Drupal hook node_insert().
+ */
+function news_feed_node_insert($node) {
+  db_insert('news_feed_guid')
+    ->fields(array(
+      'guid' => $node->guid,
+      'nid' => $node->nid,
+      ))
+  ->execute();
+
 }
 
 /**
@@ -233,6 +284,8 @@ function news_feed_submit_items($nodes_to_submit) {
 function news_feed_admin_form_delete($form, &$form_state) {
   $values = $form_state['values'];
 
+  $counter = 0;
+
   // Collect the items selected.
   foreach ($values['table'] as $delta => $item) {
 
@@ -240,12 +293,21 @@ function news_feed_admin_form_delete($form, &$form_state) {
       $output = array();
       $output = $form_state['complete form']['databaseInfo']['table']['#options'][$delta]['guid'];
 
-      // Call Delete items function based on titles collected.
-      news_feed_delete_item($output);
+      // Call Delete item function based on titles collected.
+      // Add values to counter to see if anything was posted.
+      $counter += news_feed_delete_item($output);
     }
   }
 
-  drupal_set_message(t('Boom! The selected item(s) have been deleted.'));
+  // Message to determine if anything was posted.
+  if ($counter > 0) {
+
+    drupal_set_message(t('Boom! The selected item(s) have been deleted.'));
+  }
+  else {
+
+    drupal_set_message(t('Nope! Either nothing was selected or the selected node does not exist yet.'));
+  }
 }
 
 /**

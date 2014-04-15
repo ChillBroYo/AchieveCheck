@@ -1,4 +1,5 @@
 <?php
+
 /**
  * @file
  * This file deals with special features for parsing xml into blog nodes
@@ -26,6 +27,8 @@
  * @author Samson Tse
  * @license Achieve Internet 
  */
+
+include_once drupal_get_path('module', 'news_feed') . '/' . "news_feed.admin.inc";
 
 /**
  * Utilizes the Drupal help_hook().
